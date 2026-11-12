@@ -94,8 +94,12 @@ fun App(onExit: () -> Unit) {
         if (missing.isNotEmpty()) permLauncher.launch(missing)
     }
 
+    val watcher = remember(context) { LibraryWatcher(context) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START && audioOk) watcher.start()
+            if (event == Lifecycle.Event.ON_STOP) watcher.stop()
             if (event == Lifecycle.Event.ON_RESUME) {
                 val granted = hasAudioPermission(context)
                 // Solo cerrar si el permiso se quitó mientras la app estaba abierta
@@ -129,18 +133,11 @@ fun App(onExit: () -> Unit) {
     LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
         reloadSignal.trySend(Unit)
-        // Escaneo recursivo en segundo plano, cada 0,1 s
-        launch(Dispatchers.IO) {
-            while (isActive) {
-                val known = songs.mapTo(HashSet()) { it.path }
-                scanMissingAudio(context, known)
-                delay(100)
-            }
-        }
         // Recarga la lista en cuanto llega un cambio, sin esperar
         while (true) {
             reloadSignal.receive()
             songs = withContext(Dispatchers.IO) { loadSongs(context) }
+            watcher.knownPaths = songs.mapTo(HashSet()) { it.path }
         }
     }
 
