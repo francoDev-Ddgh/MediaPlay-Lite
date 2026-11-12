@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -58,28 +57,36 @@ fun AlbumsScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
 
 @Composable
 fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
-    var path by rememberSaveable { mutableStateOf(ROOT_PATH) }
-    BackHandler(enabled = path != ROOT_PATH) { path = path.substringBeforeLast('/') }
+    val folders = remember(songs) { foldersOf(songs) }
+    var open by remember { mutableStateOf<FolderEntry?>(null) }
+    BackHandler(enabled = open != null) { open = null }
 
-    val folders = remember(songs, path) { subfoldersOf(songs, path) }
-    val direct = remember(songs, path) {
-        songs.filter { it.folder == path }.sortedBy { it.title.lowercase() }
-    }
-    val header = if (path == ROOT_PATH) "root" else path.substringAfterLast('/')
-
-    LazyColumn {
-        item {
-            Text(
-                header,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(16.dp)
-            )
+    val current = open
+    if (current == null) {
+        LazyColumn {
+            items(folders) { f ->
+                SongRow(
+                    f.name,
+                    "${displayPath(f.path)} · ${f.count} canciones",
+                    Icons.Filled.Folder
+                ) { open = f }
+            }
         }
-        items(folders) { f ->
-            SongRow(f.name, "${f.count} canciones", Icons.Filled.Folder) { path = f.path }
+    } else {
+        val list = remember(songs, current) {
+            songs.filter { it.folder == current.path }.sortedBy { it.title.lowercase() }
         }
-        items(direct) { s ->
-            SongRow(s.title, s.artist, Icons.Filled.MusicNote) { onPlay(s) }
+        LazyColumn {
+            item {
+                Text(
+                    current.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            items(list) { s ->
+                SongRow(s.title, s.artist, Icons.Filled.MusicNote) { onPlay(s) }
+            }
         }
     }
 }
