@@ -132,6 +132,8 @@ fun App(onExit: () -> Unit) {
 
     LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
+        // Arranca la vigilancia en cuanto el permiso está concedido (la primera vez no hay ON_START con permiso)
+        watcher.start()
         reloadSignal.trySend(Unit)
         // Recarga la lista en cuanto llega un cambio, sin esperar
         while (true) {
