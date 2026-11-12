@@ -21,6 +21,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
@@ -171,6 +174,8 @@ fun App(onExit: () -> Unit) {
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val visibleSongs = remember(songs, query) { songs.filter { it.matches(query) } }
     val pagerState = rememberPagerState(initialPage = tab) { TABS.size }
     val scope = rememberCoroutineScope()
     LaunchedEffect(pagerState.currentPage) { tab = pagerState.currentPage }
@@ -192,6 +197,26 @@ fun App(onExit: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             if (audioOk && !batteryOk) BatteryBanner(context)
 
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "SDPlayer Lite",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Buscar") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
             TabRow(selectedTabIndex = pagerState.currentPage) {
                 TABS.forEachIndexed { i, title ->
                     Tab(
@@ -208,10 +233,10 @@ fun App(onExit: () -> Unit) {
                 verticalAlignment = Alignment.Top
             ) { page ->
                 when (page) {
-                    0 -> AlbumsScreen(songs, onPlaySong)
-                    1 -> FoldersScreen(songs, onPlaySong)
+                    0 -> AlbumsScreen(visibleSongs, onPlaySong)
+                    1 -> FoldersScreen(visibleSongs, onPlaySong)
                     else -> AllScreen(
-                        songs = songs,
+                        songs = visibleSongs,
                         likes = likeSongs,
                         likesOn = likesOn,
                         onToggleLikes = { likesOn = !likesOn },
