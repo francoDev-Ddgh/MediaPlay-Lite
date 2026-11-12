@@ -89,9 +89,11 @@ fun App(onExit: () -> Unit) {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                audioOk = hasAudioPermission(context)
+                val granted = hasAudioPermission(context)
+                // Solo cerrar si el permiso se quitó mientras la app estaba abierta
+                if (audioOk && !granted) onExit()
+                audioOk = granted
                 batteryOk = isBatteryExempt(context)
-                if (!audioOk) onExit()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
