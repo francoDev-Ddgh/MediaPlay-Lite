@@ -1,5 +1,10 @@
 package com.sd.play
 
+import android.content.Context
+import android.content.SharedPreferences
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.SystemClock
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
@@ -16,7 +21,15 @@ class PlaybackService : MediaSessionService() {
 
     private var session: MediaSession? = null
     private lateinit var player: ExoPlayer
+    private lateinit var fx: AudioEffects
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val prefs by lazy { getSharedPreferences(AudioPrefs.NAME, MODE_PRIVATE) }
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> applyEffects() }
+    private val deviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>?) = applyEffects()
+        override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>?) = applyEffects()
+    }
 
     // Conteo de reproducciones: cuenta si se escuchó 30 s o la mitad de la canción
     private var startedAt = 0L
@@ -49,6 +62,12 @@ class PlaybackService : MediaSessionService() {
             }
         })
 
+        // Efectos de audio sobre la sesión del reproductor
+        fx = AudioEffects(player.audioSessionId)
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
+        audioManager().registerAudioDeviceCallback(deviceCallback, null)
+        applyEffects()
+
         // El botón ⏮ siempre va a la canción anterior si existe, sin reiniciar la actual
         val controlled = object : ForwardingPlayer(player) {
             override fun seekToPrevious() {
@@ -57,6 +76,19 @@ class PlaybackService : MediaSessionService() {
         }
 
         session = MediaSession.Builder(this, controlled).build()
+    }
+
+    private fun audioManager(): AudioManager =
+        getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    // Los efectos solo se activan con audífonos conectados
+    private fun applyEffects() {
+        if (!::fx.isInitialized) return
+        val hp = headphonesConnected(this)
+        fx.apply(
+            surround = hp && prefs.getBoolean(AudioPrefs.SURROUND, false),
+            solid = hp && prefs.getBoolean(AudioPrefs.SOLID, false),
+        )
     }
 
     private fun stopClock() {
@@ -78,6 +110,9 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
+        audioManager().unregisterAudioDeviceCallback(deviceCallback)
+        if (::fx.isInitialized) fx.release()
         session?.release()
         session = null
         player.release()
