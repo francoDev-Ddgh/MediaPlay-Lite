@@ -20,6 +20,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -127,11 +129,12 @@ fun App(onExit: () -> Unit) {
     LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
         reloadSignal.trySend(Unit)
-        // Escaneo recursivo continuo, en segundo plano, sin pausas
+        // Escaneo recursivo en segundo plano, cada 0,1 s
         launch(Dispatchers.IO) {
             while (isActive) {
                 val known = songs.mapTo(HashSet()) { it.path }
                 scanMissingAudio(context, known)
+                delay(100)
             }
         }
         // Recarga la lista en cuanto llega un cambio, sin esperar
@@ -156,6 +159,9 @@ fun App(onExit: () -> Unit) {
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    val pagerState = rememberPagerState(initialPage = tab) { TABS.size }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pagerState.currentPage) { tab = pagerState.currentPage }
 
     BackHandler(enabled = playerOpen) { playerOpen = false }
 
@@ -174,14 +180,21 @@ fun App(onExit: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             if (audioOk && !batteryOk) BatteryBanner(context)
 
-            TabRow(selectedTabIndex = tab) {
+            TabRow(selectedTabIndex = pagerState.currentPage) {
                 TABS.forEachIndexed { i, title ->
-                    Tab(selected = tab == i, onClick = { tab = i }, text = { Text(title) })
+                    Tab(
+                        selected = pagerState.currentPage == i,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
+                        text = { Text(title) }
+                    )
                 }
             }
 
-            Box(Modifier.weight(1f)) {
-                when (tab) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { page ->
+                when (page) {
                     0 -> AlbumsScreen(songs, onPlaySong)
                     1 -> FoldersScreen(songs, onPlaySong)
                     else -> AllScreen(
