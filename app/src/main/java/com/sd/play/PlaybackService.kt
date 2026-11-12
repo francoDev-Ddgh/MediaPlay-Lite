@@ -28,7 +28,12 @@ class PlaybackService : MediaSessionService() {
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> applyEffects() }
     private val deviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>?) = applyEffects()
-        override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>?) = applyEffects()
+        override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>?) {
+            // Si se desconectan audífonos mientras suena, la reproducción se pausa
+            val headphonesRemoved = removedDevices?.any { it.type in HEADPHONE_TYPES } == true
+            if (headphonesRemoved && ::player.isInitialized && player.isPlaying) player.pause()
+            applyEffects()
+        }
     }
 
     // Conteo de reproducciones: cuenta si se escuchó 30 s o la mitad de la canción
