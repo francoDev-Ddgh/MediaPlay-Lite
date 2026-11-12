@@ -5,6 +5,7 @@ import android.media.MediaScannerConnection
 import android.os.FileObserver
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -38,6 +39,7 @@ class LibraryWatcher(private val context: Context) {
         running = true
         worker.execute {
             watchTree(File(ROOT_PATH))
+            Log.d("SDScan", "vigilando ${observers.size} carpetas")
             postScan(audioTree(File(ROOT_PATH)))
         }
     }
@@ -87,6 +89,7 @@ class LibraryWatcher(private val context: Context) {
             override fun onEvent(event: Int, path: String?) {
                 if (path == null) return
                 val f = File(dir, path)
+                Log.d("SDScan", "evento $event en ${f.absolutePath}")
                 if (f.isDirectory) {
                     if ((event and (FileObserver.CREATE or FileObserver.MOVED_TO)) != 0) {
                         worker.execute {
@@ -108,6 +111,7 @@ class LibraryWatcher(private val context: Context) {
         main.post {
             val pending = files.filter { it.absolutePath !in knownPaths }.map { it.absolutePath }
             if (pending.isNotEmpty()) {
+                Log.d("SDScan", "escaneando ${pending.size} archivos")
                 MediaScannerConnection.scanFile(context, pending.toTypedArray(), null, null)
             }
         }
