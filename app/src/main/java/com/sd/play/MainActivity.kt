@@ -172,7 +172,8 @@ fun App(onExit: () -> Unit) {
         }
     }
 
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    // Al abrir la app se muestra la pestaña Carpetas (índice 1)
+    var tab by rememberSaveable { mutableIntStateOf(1) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val visibleSongs = remember(songs, query) { songs.filter { it.matches(query) } }
