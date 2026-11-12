@@ -34,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -103,15 +104,16 @@ fun App(onExit: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Biblioteca: carga inicial y actualización en tiempo real con debounce
+    // Biblioteca: carga inicial y actualización en tiempo real.
+    // Los cambios se agrupan: como máximo se recarga cada 1,5 s mientras Android escanea.
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
-    var libraryTick by remember { mutableIntStateOf(0) }
+    val reloadSignal = remember { Channel<Unit>(Channel.CONFLATED) }
 
     DisposableEffect(audioOk) {
         if (!audioOk) return@DisposableEffect onDispose { }
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                libraryTick++
+                reloadSignal.trySend(Unit)
             }
         }
         context.contentResolver.registerContentObserver(
@@ -120,10 +122,14 @@ fun App(onExit: () -> Unit) {
         onDispose { context.contentResolver.unregisterContentObserver(observer) }
     }
 
-    LaunchedEffect(audioOk, libraryTick) {
+    LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
-        if (libraryTick > 0) delay(800)
-        songs = withContext(Dispatchers.IO) { loadSongs(context) }
+        reloadSignal.trySend(Unit)
+        while (true) {
+            reloadSignal.receive()
+            songs = withContext(Dispatchers.IO) { loadSongs(context) }
+            delay(1500)
+        }
     }
 
     val controller = rememberController()
