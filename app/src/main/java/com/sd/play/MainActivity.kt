@@ -105,7 +105,7 @@ fun App(onExit: () -> Unit) {
     }
 
     // Biblioteca: carga inicial y actualización en tiempo real.
-    // Los cambios se agrupan: como máximo se recarga cada 1,5 s mientras Android escanea.
+    // Los cambios se agrupan: como máximo se recarga cada 0,3 s mientras Android escanea.
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
     val reloadSignal = remember { Channel<Unit>(Channel.CONFLATED) }
 
@@ -128,7 +128,7 @@ fun App(onExit: () -> Unit) {
         while (true) {
             reloadSignal.receive()
             songs = withContext(Dispatchers.IO) { loadSongs(context) }
-            delay(1500)
+            delay(300)
         }
     }
 
