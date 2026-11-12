@@ -22,6 +22,9 @@ interface PlayDao {
 
     @Query("SELECT songId FROM plays ORDER BY total DESC LIMIT 40")
     suspend fun top40(): List<Long>
+
+    @Query("SELECT * FROM plays")
+    suspend fun all(): List<PlayCount>
 }
 
 @Database(entities = [PlayCount::class], version = 1, exportSchema = false)
