@@ -95,12 +95,12 @@ fun App(onExit: () -> Unit) {
         if (missing.isNotEmpty()) permLauncher.launch(missing)
     }
 
-    val watcher = remember(context) { LibraryWatcher(context) }
+    var visible by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START && audioOk) watcher.start()
-            if (event == Lifecycle.Event.ON_STOP) watcher.stop()
+            if (event == Lifecycle.Event.ON_START) visible = true
+            if (event == Lifecycle.Event.ON_STOP) visible = false
             if (event == Lifecycle.Event.ON_RESUME) {
                 val granted = hasAudioPermission(context)
                 // Solo cerrar si el permiso se quitó mientras la app estaba abierta
@@ -133,19 +133,26 @@ fun App(onExit: () -> Unit) {
 
     LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
-        // Arranca la vigilancia en cuanto el permiso está concedido (la primera vez no hay ON_START con permiso)
-        watcher.start()
         reloadSignal.trySend(Unit)
         // Recarga la lista en cuanto llega un cambio, sin esperar
         while (true) {
             reloadSignal.receive()
             try {
                 songs = withContext(Dispatchers.IO) { loadSongs(context) }
-                watcher.knownPaths = songs.mapTo(HashSet()) { it.path }
                 Log.d("SDScan", "recarga: ${songs.size} canciones")
             } catch (e: Exception) {
                 Log.e("SDScan", "error al recargar", e)
             }
+        }
+    }
+
+    // Escaneo recursivo cada 0,1 s, solo mientras la app está visible
+    LaunchedEffect(audioOk, visible) {
+        if (!audioOk || !visible) return@LaunchedEffect
+        while (isActive) {
+            val known = songs.mapTo(HashSet()) { it.path }
+            withContext(Dispatchers.IO) { scanMissingAudio(context, known) }
+            delay(100)
         }
     }
 
