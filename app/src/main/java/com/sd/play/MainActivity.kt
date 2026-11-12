@@ -24,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
@@ -176,6 +177,7 @@ fun App(onExit: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(1) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var searching by rememberSaveable { mutableStateOf(false) }
     val visibleSongs = remember(songs, query) { songs.filter { it.matches(query) } }
     val pagerState = rememberPagerState(initialPage = tab) { TABS.size }
     val scope = rememberCoroutineScope()
@@ -199,23 +201,31 @@ fun App(onExit: () -> Unit) {
             if (audioOk && !batteryOk) BatteryBanner(context)
 
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "SDPlayer Lite",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("Buscar") },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.weight(1f)
-                )
+                if (searching) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = { Text("Buscar") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { query = ""; searching = false }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Cerrar búsqueda")
+                    }
+                } else {
+                    Text(
+                        "SDPlayer Lite",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { searching = true }) {
+                        Icon(Icons.Filled.Search, contentDescription = "Buscar")
+                    }
+                }
             }
 
             TabRow(selectedTabIndex = pagerState.currentPage) {
