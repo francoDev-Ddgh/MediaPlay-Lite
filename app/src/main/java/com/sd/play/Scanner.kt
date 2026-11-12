@@ -2,6 +2,7 @@ package com.sd.play
 
 import android.content.Context
 import android.media.MediaScannerConnection
+import android.util.Log
 import java.io.File
 
 private val AUDIO_EXT = setOf(
@@ -26,6 +27,7 @@ fun scanMissingAudio(context: Context, known: Set<String>) {
         }
     }
     if (pending.isNotEmpty()) {
+        Log.d("SDScan", "escaneando ${pending.size} archivos")
         MediaScannerConnection.scanFile(context, pending.toTypedArray(), null, null)
     }
 }
