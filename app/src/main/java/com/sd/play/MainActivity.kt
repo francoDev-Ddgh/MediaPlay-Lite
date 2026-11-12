@@ -19,6 +19,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -148,7 +149,13 @@ fun App(onExit: () -> Unit) {
         controller?.playList(list, index, shuffle = true)
     }
 
-    Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
         Column(Modifier.fillMaxSize()) {
             if (audioOk && !batteryOk) BatteryBanner(context)
 
