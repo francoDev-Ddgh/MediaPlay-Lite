@@ -194,6 +194,8 @@ fun App(onExit: () -> Unit) {
 
     BackHandler(enabled = playerOpen) { playerOpen = false }
 
+    val currentSong = remember(songs, ui.mediaId) { songs.find { it.id == ui.mediaId?.toLongOrNull() } }
+
     val onPlaySong: (Song) -> Unit = { s -> controller?.playFolderOf(s, sortedSongs) }
     val onPlayLikes: (List<Song>, Int) -> Unit = { list, index ->
         controller?.playList(list, index, shuffle = true)
@@ -277,8 +279,8 @@ fun App(onExit: () -> Unit) {
                 verticalAlignment = Alignment.Top
             ) { page ->
                 when (page) {
-                    0 -> AlbumsScreen(visibleSongs, onPlaySong)
-                    1 -> FoldersScreen(visibleSongs, onPlaySong)
+                    0 -> AlbumsScreen(visibleSongs, currentSong, ui.playing, onPlaySong)
+                    1 -> FoldersScreen(visibleSongs, currentSong, ui.playing, onPlaySong)
                     else -> AllScreen(
                         songs = visibleSongs,
                         likes = likeSongs,
@@ -287,6 +289,8 @@ fun App(onExit: () -> Unit) {
                         onPlay = onPlaySong,
                         onPlayLikes = onPlayLikes,
                         showLetters = sortMode == SortMode.TITLE,
+                        currentSong = currentSong,
+                        playing = ui.playing,
                     )
                 }
             }
