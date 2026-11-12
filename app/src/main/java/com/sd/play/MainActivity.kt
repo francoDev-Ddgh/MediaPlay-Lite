@@ -14,6 +14,7 @@ import android.os.PowerManager
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             SDTheme {
                 App(onExit = { finish() })
@@ -146,7 +148,7 @@ fun App(onExit: () -> Unit) {
         controller?.playList(list, index, shuffle = true)
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
             if (audioOk && !batteryOk) BatteryBanner(context)
 
