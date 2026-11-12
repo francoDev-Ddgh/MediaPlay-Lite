@@ -20,12 +20,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = System.getenv("KEYSTORE_PATH")?.let { file(it) }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Firma temporal con la clave de depuración, solo para poder instalar el APK
-            signingConfig = signingConfigs.getByName("debug")
+            // Firma de publicación si hay secretos en GitHub; si no, la de depuración
+            signingConfig = if (System.getenv("KEYSTORE_PATH") != null)
+                signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 
