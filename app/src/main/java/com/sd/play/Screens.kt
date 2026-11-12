@@ -1,23 +1,45 @@
 package com.sd.play
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+private val LETTERS = listOf("#") + ('A'..'Z').map { it.toString() }
+
+private fun letterOf(title: String): String {
+    val c = title.firstOrNull()?.uppercaseChar() ?: return "#"
+    return if (c in 'A'..'Z') c.toString() else "#"
+}
 
 @Composable
-fun SongRow(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+fun SongRow(title: String, subtitle: String, artwork: Uri?, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title, maxLines = 1) },
+        supportingContent = { Text(subtitle, maxLines = 1) },
+        leadingContent = { Artwork(artwork, 48.dp, RoundedCornerShape(8.dp)) },
+        modifier = Modifier.clickable(onClick = onClick)
+    )
+}
+
+@Composable
+fun IconRow(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(title, maxLines = 1) },
         supportingContent = { Text(subtitle, maxLines = 1) },
@@ -36,20 +58,23 @@ fun AlbumsScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
     if (current == null) {
         LazyColumn {
             items(albums) { a ->
-                SongRow(a.name, a.artist, Icons.Filled.Album) { open = a }
+                SongRow(a.name, "${a.artist} · ${a.songs.size} canciones", albumArtUri(a.albumId)) { open = a }
             }
         }
     } else {
         LazyColumn {
             item {
-                Text(
-                    current.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(16.dp)
-                )
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(albumArtUri(current.albumId), 96.dp, RoundedCornerShape(16.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(current.name, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                        Text(current.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                    }
+                }
             }
             items(current.songs) { s ->
-                SongRow(s.title, s.artist, Icons.Filled.MusicNote) { onPlay(s) }
+                SongRow(s.title, s.artist, s.artwork) { onPlay(s) }
             }
         }
     }
@@ -65,17 +90,11 @@ fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
     if (current == null) {
         LazyColumn {
             items(folders) { f ->
-                SongRow(
-                    f.name,
-                    "${f.count} canciones",
-                    Icons.Filled.Folder
-                ) { open = f }
+                IconRow(f.name, "${f.count} canciones", Icons.Filled.Folder) { open = f }
             }
         }
     } else {
-        val list = remember(songs, current) {
-            songs.filter { it.folder == current.path }.sortedBy { it.title.lowercase() }
-        }
+        val list = remember(songs, current) { songs.filter { it.folder == current.path } }
         LazyColumn {
             item {
                 Text(
@@ -85,7 +104,7 @@ fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
                 )
             }
             items(list) { s ->
-                SongRow(s.title, s.artist, Icons.Filled.MusicNote) { onPlay(s) }
+                SongRow(s.title, s.artist, s.artwork) { onPlay(s) }
             }
         }
     }
@@ -99,9 +118,21 @@ fun AllScreen(
     onToggleLikes: () -> Unit,
     onPlay: (Song) -> Unit,
     onPlayLikes: (List<Song>, Int) -> Unit,
+    showLetters: Boolean,
 ) {
     val list = if (likesOn) likes else songs
-    Column {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // Índice de la primera canción de cada letra, para el índice lateral
+    val firstIndex = remember(list, showLetters, likesOn) {
+        if (showLetters && !likesOn) {
+            list.withIndex().groupBy { letterOf(it.value.title) }.mapValues { it.value.first().index }
+        } else {
+            emptyMap()
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             FilterChip(
                 selected = likesOn,
@@ -116,10 +147,33 @@ fun AllScreen(
                 modifier = Modifier.padding(16.dp)
             )
         }
-        LazyColumn {
-            itemsIndexed(list) { index, s ->
-                SongRow(s.title, s.artist, Icons.Filled.MusicNote) {
-                    if (likesOn) onPlayLikes(list, index) else onPlay(s)
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                itemsIndexed(list) { index, s ->
+                    SongRow(s.title, s.artist, s.artwork) {
+                        if (likesOn) onPlayLikes(list, index) else onPlay(s)
+                    }
+                }
+            }
+            if (firstIndex.isNotEmpty()) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    LETTERS.forEach { letter ->
+                        val target = firstIndex[letter]
+                        Text(
+                            letter,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (target != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                            modifier = Modifier
+                                .padding(vertical = 1.dp)
+                                .clickable(enabled = target != null) {
+                                    target?.let { scope.launch { listState.scrollToItem(it) } }
+                                }
+                        )
+                    }
                 }
             }
         }
