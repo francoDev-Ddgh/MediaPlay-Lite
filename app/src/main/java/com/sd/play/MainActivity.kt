@@ -35,6 +35,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -125,10 +127,17 @@ fun App(onExit: () -> Unit) {
     LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
         reloadSignal.trySend(Unit)
+        // Escaneo recursivo continuo, en segundo plano, sin pausas
+        launch(Dispatchers.IO) {
+            while (isActive) {
+                val known = songs.mapTo(HashSet()) { it.path }
+                scanMissingAudio(context, known)
+            }
+        }
+        // Recarga la lista en cuanto llega un cambio, sin esperar
         while (true) {
             reloadSignal.receive()
             songs = withContext(Dispatchers.IO) { loadSongs(context) }
-            delay(300)
         }
     }
 
