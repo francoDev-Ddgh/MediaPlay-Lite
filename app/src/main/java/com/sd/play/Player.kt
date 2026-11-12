@@ -1,18 +1,37 @@
 package com.sd.play
 
 import android.content.ComponentName
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.shape.RoundedCornerShape
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.LruCache
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
@@ -20,12 +39,15 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 data class PlayerUi(
     val hasItem: Boolean = false,
     val title: String = "",
     val artist: String = "",
+    val artwork: Uri? = null,
     val playing: Boolean = false,
     val shuffle: Boolean = false,
     val repeat: Int = Player.REPEAT_MODE_OFF,
@@ -37,6 +59,7 @@ fun Player.toUi() = PlayerUi(
     hasItem = currentMediaItem != null,
     title = mediaMetadata.title?.toString().orEmpty(),
     artist = mediaMetadata.artist?.toString().orEmpty(),
+    artwork = mediaMetadata.artworkUri,
     playing = isPlaying,
     shuffle = shuffleModeEnabled,
     repeat = repeatMode,
@@ -48,11 +71,15 @@ fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
     .setMediaId(id.toString())
     .setUri(uri)
     .setMediaMetadata(
-        MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album).build()
+        MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .setAlbumTitle(album)
+            .setArtworkUri(artwork)
+            .build()
     )
     .build()
 
-// Reproduce una lista; si shuffle es true, el orden se mezcla y la canción inicial queda primero
 fun MediaController.playList(songs: List<Song>, start: Int, shuffle: Boolean = false) {
     if (songs.isEmpty()) return
     setMediaItems(songs.map { it.toMediaItem() }, start.coerceIn(0, songs.lastIndex), 0L)
@@ -61,9 +88,9 @@ fun MediaController.playList(songs: List<Song>, start: Int, shuffle: Boolean = f
     play()
 }
 
-// La cola es siempre la carpeta física donde está la canción
+// La cola es la carpeta física de la canción, en el orden que trae la lista
 fun MediaController.playFolderOf(song: Song, all: List<Song>) {
-    val folder = all.filter { it.folder == song.folder }.sortedBy { it.title.lowercase() }
+    val folder = all.filter { it.folder == song.folder }
     playList(folder, folder.indexOfFirst { it.id == song.id })
 }
 
@@ -76,14 +103,71 @@ fun MediaController.cycleRepeat() {
 }
 
 fun repeatLabel(mode: Int): String = when (mode) {
-    Player.REPEAT_MODE_ONE -> "Repetir canción"
-    Player.REPEAT_MODE_ALL -> "Repetir carpeta"
-    else -> "Repetir desactivado"
+    Player.REPEAT_MODE_ONE -> "Repetir: esta canción"
+    Player.REPEAT_MODE_ALL -> "Repetir: carpeta"
+    else -> "Repetir: desactivado"
 }
 
 fun formatMs(ms: Long): String {
     val s = ms / 1000
     return "%d:%02d".format(s / 60, s % 60)
+}
+
+private val artCache = LruCache<String, ImageBitmap>(80)
+
+@Composable
+fun rememberArtwork(uri: Uri?): ImageBitmap? {
+    val context = LocalContext.current
+    val key = uri?.toString()
+    val bitmap by produceState<ImageBitmap?>(initialValue = key?.let { artCache.get(it) }, key) {
+        if (uri == null) {
+            value = null
+            return@produceState
+        }
+        val cached = artCache.get(uri.toString())
+        if (cached != null) {
+            value = cached
+            return@produceState
+        }
+        val loaded = withContext(Dispatchers.IO) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            } catch (e: Exception) {
+                null
+            }
+        }?.asImageBitmap()
+        if (loaded != null) artCache.put(uri.toString(), loaded)
+        value = loaded
+    }
+    return bitmap
+}
+
+@Composable
+fun Artwork(uri: Uri?, size: Dp, shape: Shape = RoundedCornerShape(12.dp), modifier: Modifier = Modifier) {
+    val bitmap = rememberArtwork(uri)
+    Box(
+        modifier
+            .size(size)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(size / 2)
+            )
+        }
+    }
 }
 
 @Composable
@@ -119,7 +203,7 @@ fun rememberPlayerUi(controller: MediaController?): PlayerUi {
     // Actualiza la posición de la barra mientras suena
     LaunchedEffect(controller, ui.playing) {
         while (controller != null && ui.playing) {
-            delay(500)
+            delay(250)
             ui = controller.toUi()
         }
     }
@@ -129,6 +213,7 @@ fun rememberPlayerUi(controller: MediaController?): PlayerUi {
 @Composable
 fun MiniPlayer(ui: PlayerUi, controller: MediaController, onOpen: () -> Unit) {
     var drag by remember { mutableFloatStateOf(0f) }
+    val progress = if (ui.duration > 0) ui.position.toFloat() / ui.duration else 0f
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         shape = RoundedCornerShape(24.dp),
@@ -144,20 +229,32 @@ fun MiniPlayer(ui: PlayerUi, controller: MediaController, onOpen: () -> Unit) {
                 ) { _, amount -> drag += amount }
             }
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f).clickable(onClick = onOpen)) {
-                Text(ui.title, maxLines = 1, style = MaterialTheme.typography.titleSmall)
-                Text(ui.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall)
+        Column {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Artwork(ui.artwork, 44.dp, RoundedCornerShape(10.dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp)
+                        .clickable(onClick = onOpen)
+                ) {
+                    Text(ui.title, maxLines = 1, style = MaterialTheme.typography.titleSmall)
+                    Text(ui.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                }
+                IconButton(onClick = { if (ui.playing) controller.pause() else controller.play() }) {
+                    Icon(
+                        imageVector = if (ui.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = null
+                    )
+                }
             }
-            IconButton(onClick = { if (ui.playing) controller.pause() else controller.play() }) {
-                Icon(
-                    imageVector = if (ui.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = null
-                )
-            }
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(3.dp)
+            )
         }
     }
 }
@@ -183,13 +280,37 @@ fun FullPlayer(ui: PlayerUi, controller: MediaController, onMinimize: () -> Unit
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(ui.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2)
+            // Indicador para deslizar hacia abajo
+            Box(
+                Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            Spacer(Modifier.height(24.dp))
+            Artwork(ui.artwork, 280.dp, RoundedCornerShape(24.dp))
+            Spacer(Modifier.height(24.dp))
+            Text(
+                ui.title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(8.dp))
-            Text(ui.artist, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-            Spacer(Modifier.height(32.dp))
+            Text(
+                ui.artist,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(24.dp))
             Slider(
                 value = if (ui.duration > 0) ui.position.toFloat() / ui.duration else 0f,
-                onValueChange = { controller.seekTo((it * ui.duration).toLong()) }
+                onValueChange = { controller.seekTo((it * ui.duration).toLong()) },
+                modifier = Modifier.fillMaxWidth()
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatMs(ui.position), style = MaterialTheme.typography.bodySmall)
