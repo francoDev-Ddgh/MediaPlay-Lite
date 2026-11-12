@@ -2,6 +2,7 @@ package com.sd.play
 
 import android.content.ComponentName
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -130,8 +131,10 @@ fun MiniPlayer(ui: PlayerUi, controller: MediaController, onOpen: () -> Unit) {
     var drag by remember { mutableFloatStateOf(0f) }
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
