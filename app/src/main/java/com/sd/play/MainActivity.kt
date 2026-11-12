@@ -15,19 +15,21 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,11 +43,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +89,7 @@ fun App(onExit: () -> Unit) {
 
     var audioOk by remember { mutableStateOf(hasAudioPermission(context)) }
     var batteryOk by remember { mutableStateOf(isBatteryExempt(context)) }
+    var visible by remember { mutableStateOf(false) }
 
     // Sin permiso de audio la app se cierra de forma ordenada
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -99,15 +102,12 @@ fun App(onExit: () -> Unit) {
         if (missing.isNotEmpty()) permLauncher.launch(missing)
     }
 
-    var visible by remember { mutableStateOf(false) }
-
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) visible = true
             if (event == Lifecycle.Event.ON_STOP) visible = false
             if (event == Lifecycle.Event.ON_RESUME) {
                 val granted = hasAudioPermission(context)
-                // Solo cerrar si el permiso se quitó mientras la app estaba abierta
                 if (audioOk && !granted) onExit()
                 audioOk = granted
                 batteryOk = isBatteryExempt(context)
@@ -117,8 +117,7 @@ fun App(onExit: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Biblioteca: carga inicial y actualización en tiempo real.
-    // Los cambios se agrupan: como máximo se recarga cada 0,3 s mientras Android escanea.
+    // Biblioteca: carga inicial y recarga en cuanto llega un cambio
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
     val reloadSignal = remember { Channel<Unit>(Channel.CONFLATED) }
 
@@ -138,7 +137,6 @@ fun App(onExit: () -> Unit) {
     LaunchedEffect(audioOk) {
         if (!audioOk) return@LaunchedEffect
         reloadSignal.trySend(Unit)
-        // Recarga la lista en cuanto llega un cambio, sin esperar
         while (true) {
             reloadSignal.receive()
             try {
@@ -165,27 +163,36 @@ fun App(onExit: () -> Unit) {
 
     var likesOn by rememberSaveable { mutableStateOf(false) }
     var likeSongs by remember { mutableStateOf<List<Song>>(emptyList()) }
+    var plays by remember { mutableStateOf<Map<Long, Int>>(emptyMap()) }
 
     LaunchedEffect(likesOn, songs, ui.title) {
-        likeSongs = withContext(Dispatchers.IO) {
-            val ids = AppDatabase.get(context).playDao().top40()
-            ids.mapNotNull { id -> songs.find { it.id == id } }
+        val result = withContext(Dispatchers.IO) {
+            val dao = AppDatabase.get(context).playDao()
+            Pair(dao.top40(), dao.all().associate { it.songId to it.total })
         }
+        likeSongs = result.first.mapNotNull { id -> songs.find { it.id == id } }
+        plays = result.second
     }
 
-    // Al abrir la app se muestra la pestaña Carpetas (índice 1)
-    var tab by rememberSaveable { mutableIntStateOf(1) }
-    var playerOpen by rememberSaveable { mutableStateOf(false) }
+    var sortIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sortMode = SortMode.entries[sortIndex]
+    val sortedSongs = remember(songs, sortMode, plays) { sortSongs(songs, sortMode, plays) }
+
     var query by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
-    val visibleSongs = remember(songs, query) { songs.filter { it.matches(query) } }
+    var sortMenu by remember { mutableStateOf(false) }
+    val visibleSongs = remember(sortedSongs, query) { sortedSongs.filter { it.matches(query) } }
+
+    var tab by rememberSaveable { mutableIntStateOf(1) }
+    var playerOpen by rememberSaveable { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = tab) { TABS.size }
     val scope = rememberCoroutineScope()
+
     LaunchedEffect(pagerState.currentPage) { tab = pagerState.currentPage }
 
     BackHandler(enabled = playerOpen) { playerOpen = false }
 
-    val onPlaySong: (Song) -> Unit = { s -> controller?.playFolderOf(s, songs) }
+    val onPlaySong: (Song) -> Unit = { s -> controller?.playFolderOf(s, sortedSongs) }
     val onPlayLikes: (List<Song>, Int) -> Unit = { list, index ->
         controller?.playList(list, index, shuffle = true)
     }
@@ -225,6 +232,27 @@ fun App(onExit: () -> Unit) {
                     IconButton(onClick = { searching = true }) {
                         Icon(Icons.Filled.Search, contentDescription = "Buscar")
                     }
+                    Box {
+                        IconButton(onClick = { sortMenu = true }) {
+                            Icon(Icons.Filled.Sort, contentDescription = "Ordenar")
+                        }
+                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            SortMode.entries.forEach { mode ->
+                                DropdownMenuItem(
+                                    text = { Text(mode.label) },
+                                    onClick = {
+                                        sortIndex = mode.ordinal
+                                        sortMenu = false
+                                    },
+                                    leadingIcon = {
+                                        if (sortIndex == mode.ordinal) {
+                                            Icon(Icons.Filled.Check, contentDescription = null)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -253,6 +281,7 @@ fun App(onExit: () -> Unit) {
                         onToggleLikes = { likesOn = !likesOn },
                         onPlay = onPlaySong,
                         onPlayLikes = onPlayLikes,
+                        showLetters = sortMode == SortMode.TITLE,
                     )
                 }
             }
