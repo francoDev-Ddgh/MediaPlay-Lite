@@ -67,7 +67,7 @@ fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
             items(folders) { f ->
                 SongRow(
                     f.name,
-                    "${displayPath(f.path)} · ${f.count} canciones",
+                    "${f.count} canciones",
                     Icons.Filled.Folder
                 ) { open = f }
             }
