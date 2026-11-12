@@ -6,7 +6,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 
-// Ruta interna de la raíz. Solo se usa por dentro; en pantalla siempre se muestra "root".
+// Ruta interna de la raíz. Solo se usa por dentro; en pantalla se muestra "root".
 val ROOT_PATH: String = Environment.getExternalStorageDirectory().absolutePath
 
 data class Song(
@@ -16,15 +16,26 @@ data class Song(
     val album: String,
     val albumId: Long,
     val durationMs: Long,
+    val dateAdded: Long,
     val uri: Uri,
     val path: String,
 ) {
     val folder: String get() = path.substringBeforeLast('/')
+    val artwork: Uri get() = albumArtUri(albumId)
 }
 
-data class Album(val name: String, val artist: String, val songs: List<Song>)
+data class Album(val name: String, val artist: String, val albumId: Long, val songs: List<Song>)
 
 data class FolderEntry(val name: String, val path: String, val count: Int)
+
+enum class SortMode(val label: String) {
+    TITLE("A–Z"),
+    RECENT("Recientes"),
+    MOST_PLAYED("Más escuchadas"),
+}
+
+fun albumArtUri(albumId: Long): Uri =
+    ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
 
 fun loadSongs(context: Context): List<Song> {
     val songs = mutableListOf<Song>()
@@ -35,9 +46,9 @@ fun loadSongs(context: Context): List<Song> {
         MediaStore.Audio.Media.ALBUM,
         MediaStore.Audio.Media.ALBUM_ID,
         MediaStore.Audio.Media.DURATION,
+        MediaStore.Audio.Media.DATE_ADDED,
         MediaStore.Audio.Media.DATA,
     )
-    // Todo el audio del teléfono, excepto tonos, notificaciones y alarmas
     val selection = "${MediaStore.Audio.Media.MIME_TYPE} LIKE ? AND " +
         "${MediaStore.Audio.Media.IS_RINGTONE} = 0 AND " +
         "${MediaStore.Audio.Media.IS_NOTIFICATION} = 0 AND " +
@@ -51,6 +62,7 @@ fun loadSongs(context: Context): List<Song> {
         val albumI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
         val albumIdI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
         val durI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+        val dateI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
         val dataI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
         while (c.moveToNext()) {
             val path = c.getString(dataI) ?: continue
@@ -62,6 +74,7 @@ fun loadSongs(context: Context): List<Song> {
                 album = c.getString(albumI) ?: "Álbum desconocido",
                 albumId = c.getLong(albumIdI),
                 durationMs = c.getLong(durI),
+                dateAdded = c.getLong(dateI),
                 uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
                 path = path,
             )
@@ -70,22 +83,16 @@ fun loadSongs(context: Context): List<Song> {
     return songs
 }
 
+fun sortSongs(songs: List<Song>, mode: SortMode, plays: Map<Long, Int>): List<Song> = when (mode) {
+    SortMode.TITLE -> songs.sortedWith(compareBy<Song>({ it.album.lowercase() }, { it.title.lowercase() }))
+    SortMode.RECENT -> songs.sortedByDescending { it.dateAdded }
+    SortMode.MOST_PLAYED -> songs.sortedByDescending { plays[it.id] ?: 0 }
+}
+
+// El orden de los álbumes sigue el orden de sus canciones
 fun albumsOf(songs: List<Song>): List<Album> =
     songs.groupBy { it.albumId }
-        .map { (_, list) -> Album(list.first().album, list.first().artist, list.sortedBy { it.title.lowercase() }) }
-        .sortedBy { it.name.lowercase() }
-
-fun subfoldersOf(songs: List<Song>, path: String): List<FolderEntry> {
-    val prefix = "$path/"
-    return songs
-        .filter { it.path.startsWith(prefix) }
-        .map { it.path.removePrefix(prefix) }
-        .filter { it.contains('/') }
-        .groupingBy { it.substringBefore('/') }
-        .eachCount()
-        .map { (name, count) -> FolderEntry(name, "$path/$name", count) }
-        .sortedBy { it.name.lowercase() }
-}
+        .map { (id, list) -> Album(list.first().album, list.first().artist, id, list) }
 
 fun foldersOf(songs: List<Song>): List<FolderEntry> =
     songs.groupBy { it.folder }
@@ -93,9 +100,6 @@ fun foldersOf(songs: List<Song>): List<FolderEntry> =
             FolderEntry(if (path == ROOT_PATH) "root" else path.substringAfterLast('/'), path, list.size)
         }
         .sortedBy { it.path.lowercase() }
-
-fun displayPath(path: String): String =
-    if (path == ROOT_PATH) "root" else "root/" + path.removePrefix("$ROOT_PATH/")
 
 fun Song.matches(query: String): Boolean =
     query.isBlank() ||
