@@ -4,6 +4,9 @@ import android.content.ComponentName
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.LruCache
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -154,20 +157,22 @@ fun Artwork(uri: Uri?, size: Dp, shape: Shape = RoundedCornerShape(12.dp), modif
             .background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.Center
     ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Filled.MusicNote,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(size / 2)
-            )
+        Crossfade(targetState = bitmap, label = "artwork") { bmp ->
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(size / 2)
+                )
+            }
         }
     }
 }
@@ -264,6 +269,15 @@ fun MiniPlayer(ui: PlayerUi, controller: MediaController, onOpen: () -> Unit) {
 @Composable
 fun FullPlayer(ui: PlayerUi, controller: MediaController, onMinimize: () -> Unit) {
     var drag by remember { mutableFloatStateOf(0f) }
+    val shuffleTint by animateColorAsState(
+        if (ui.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "shuffleTint"
+    )
+    val repeatTint by animateColorAsState(
+        if (ui.repeat == Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.onSurfaceVariant
+        else MaterialTheme.colorScheme.primary,
+        label = "repeatTint"
+    )
     Surface(
         color = MaterialTheme.colorScheme.background,
         modifier = Modifier
@@ -327,10 +341,12 @@ fun FullPlayer(ui: PlayerUi, controller: MediaController, onMinimize: () -> Unit
                     Icon(Icons.Filled.SkipPrevious, contentDescription = null, modifier = Modifier.size(40.dp))
                 }
                 FilledIconButton(onClick = { if (ui.playing) controller.pause() else controller.play() }) {
-                    Icon(
-                        imageVector = if (ui.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = null
-                    )
+                    AnimatedContent(targetState = ui.playing, label = "playPause") { playing ->
+                        Icon(
+                            imageVector = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = null
+                        )
+                    }
                 }
                 IconButton(onClick = { controller.seekToNext() }) {
                     Icon(Icons.Filled.SkipNext, contentDescription = null, modifier = Modifier.size(40.dp))
@@ -342,16 +358,14 @@ fun FullPlayer(ui: PlayerUi, controller: MediaController, onMinimize: () -> Unit
                     Icon(
                         imageVector = Icons.Filled.Shuffle,
                         contentDescription = null,
-                        tint = if (ui.shuffle) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = shuffleTint
                     )
                 }
                 IconButton(onClick = { controller.cycleRepeat() }) {
                     Icon(
                         imageVector = if (ui.repeat == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat,
                         contentDescription = null,
-                        tint = if (ui.repeat == Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.primary
+                        tint = repeatTint
                     )
                 }
             }
