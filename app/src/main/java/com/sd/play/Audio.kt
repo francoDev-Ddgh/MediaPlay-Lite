@@ -14,7 +14,7 @@ object AudioPrefs {
     const val SOLID = "solid"
 }
 
-private val HEADPHONE_TYPES = setOf(
+internal val HEADPHONE_TYPES = setOf(
     AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
     AudioDeviceInfo.TYPE_WIRED_HEADSET,
     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
