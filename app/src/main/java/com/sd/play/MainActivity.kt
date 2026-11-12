@@ -20,6 +20,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -209,7 +216,9 @@ fun App(onExit: () -> Unit) {
             .navigationBarsPadding()
     ) {
         Column(Modifier.fillMaxSize()) {
-            if (audioOk && !batteryOk) BatteryBanner(context)
+            AnimatedVisibility(visible = audioOk && !batteryOk) {
+                BatteryBanner(context)
+            }
 
             Row(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -295,16 +304,30 @@ fun App(onExit: () -> Unit) {
                 }
             }
 
-            if (ui.hasItem && controller != null) {
-                MiniPlayer(ui, controller) { playerOpen = true }
+            AnimatedVisibility(
+                visible = ui.hasItem && controller != null,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            ) {
+                if (controller != null) MiniPlayer(ui, controller) { playerOpen = true }
             }
         }
 
-        if (playerOpen && controller != null) {
-            FullPlayer(ui, controller) { playerOpen = false }
+        AnimatedVisibility(
+            visible = playerOpen && controller != null,
+            modifier = Modifier.fillMaxSize(),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        ) {
+            if (controller != null) FullPlayer(ui, controller) { playerOpen = false }
         }
 
-        if (settingsOpen) {
+        AnimatedVisibility(
+            visible = settingsOpen,
+            modifier = Modifier.fillMaxSize(),
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+        ) {
             SettingsScreen { settingsOpen = false }
         }
     }
