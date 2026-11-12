@@ -37,9 +37,13 @@ fun loadSongs(context: Context): List<Song> {
         MediaStore.Audio.Media.DURATION,
         MediaStore.Audio.Media.DATA,
     )
-    val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+    // Todo el audio del teléfono, excepto tonos, notificaciones y alarmas
+    val selection = "${MediaStore.Audio.Media.MIME_TYPE} LIKE ? AND " +
+        "${MediaStore.Audio.Media.IS_RINGTONE} = 0 AND " +
+        "${MediaStore.Audio.Media.IS_NOTIFICATION} = 0 AND " +
+        "${MediaStore.Audio.Media.IS_ALARM} = 0"
     context.contentResolver.query(
-        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, null, null
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, arrayOf("audio/%"), null
     )?.use { c ->
         val idI = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
         val titleI = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
