@@ -204,7 +204,8 @@ fun App(onExit: () -> Unit) {
 
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.Top
             ) { page ->
                 when (page) {
                     0 -> AlbumsScreen(songs, onPlaySong)
