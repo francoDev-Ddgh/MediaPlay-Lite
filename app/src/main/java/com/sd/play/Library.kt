@@ -86,3 +86,19 @@ fun subfoldersOf(songs: List<Song>, path: String): List<FolderEntry> {
         .map { (name, count) -> FolderEntry(name, "$path/$name", count) }
         .sortedBy { it.name.lowercase() }
 }
+
+fun foldersOf(songs: List<Song>): List<FolderEntry> =
+    songs.groupBy { it.folder }
+        .map { (path, list) ->
+            FolderEntry(if (path == ROOT_PATH) "root" else path.substringAfterLast('/'), path, list.size)
+        }
+        .sortedBy { it.path.lowercase() }
+
+fun displayPath(path: String): String =
+    if (path == ROOT_PATH) "root" else "root/" + path.removePrefix("$ROOT_PATH/")
+
+fun Song.matches(query: String): Boolean =
+    query.isBlank() ||
+        title.contains(query, ignoreCase = true) ||
+        artist.contains(query, ignoreCase = true) ||
+        album.contains(query, ignoreCase = true)
