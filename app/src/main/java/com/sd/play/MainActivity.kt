@@ -13,6 +13,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
@@ -138,8 +139,13 @@ fun App(onExit: () -> Unit) {
         // Recarga la lista en cuanto llega un cambio, sin esperar
         while (true) {
             reloadSignal.receive()
-            songs = withContext(Dispatchers.IO) { loadSongs(context) }
-            watcher.knownPaths = songs.mapTo(HashSet()) { it.path }
+            try {
+                songs = withContext(Dispatchers.IO) { loadSongs(context) }
+                watcher.knownPaths = songs.mapTo(HashSet()) { it.path }
+                Log.d("SDScan", "recarga: ${songs.size} canciones")
+            } catch (e: Exception) {
+                Log.e("SDScan", "error al recargar", e)
+            }
         }
     }
 
