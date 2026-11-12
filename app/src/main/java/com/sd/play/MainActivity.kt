@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -185,6 +186,7 @@ fun App(onExit: () -> Unit) {
 
     var tab by rememberSaveable { mutableIntStateOf(1) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = tab) { TABS.size }
     val scope = rememberCoroutineScope()
 
@@ -253,6 +255,9 @@ fun App(onExit: () -> Unit) {
                             }
                         }
                     }
+                    IconButton(onClick = { settingsOpen = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Ajustes")
+                    }
                 }
             }
 
@@ -293,6 +298,10 @@ fun App(onExit: () -> Unit) {
 
         if (playerOpen && controller != null) {
             FullPlayer(ui, controller) { playerOpen = false }
+        }
+
+        if (settingsOpen) {
+            SettingsScreen { settingsOpen = false }
         }
     }
 }
