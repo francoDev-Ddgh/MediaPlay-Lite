@@ -24,12 +24,13 @@ jobs:
           gradle-version: '8.9'
 
       - name: Preparar firma de publicación
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
 
       - name: Compilar release (arm64)
         env:
