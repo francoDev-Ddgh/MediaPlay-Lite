@@ -2,11 +2,17 @@ package com.sd.play
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,7 +42,6 @@ private fun letterOf(title: String): String {
     return if (c in 'A'..'Z') c.toString() else "#"
 }
 
-// Tres barras que suben y bajan mientras suena; en pausa quedan quietas
 @Composable
 fun EqualizerBars(playing: Boolean, color: Color) {
     val transition = rememberInfiniteTransition(label = "equalizer")
@@ -134,39 +139,50 @@ fun AlbumsScreen(songs: List<Song>, currentSong: Song?, playing: Boolean, onPlay
     var open by remember { mutableStateOf<Album?>(null) }
     BackHandler(enabled = open != null) { open = null }
 
-    val current = open
-    if (current == null) {
-        LazyColumn {
-            items(albums) { a ->
-                SongRow(
-                    a.name,
-                    "${a.artist} · ${a.songs.size} canciones",
-                    albumArtUri(a.albumId),
-                    active = a.songs.any { it.id == currentSong?.id },
-                    playing = playing
-                ) { open = a }
+    AnimatedContent(
+        targetState = open,
+        label = "albumsNav",
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInHorizontally { it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 4 } + fadeOut())
+            } else {
+                (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
             }
         }
-    } else {
-        LazyColumn {
-            item {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(albumArtUri(current.albumId), 96.dp, RoundedCornerShape(16.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text(current.name, style = MaterialTheme.typography.titleLarge, maxLines = 2)
-                        Text(current.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                    }
+    ) { current ->
+        if (current == null) {
+            LazyColumn {
+                items(albums) { a ->
+                    SongRow(
+                        a.name,
+                        "${a.artist} · ${a.songs.size} canciones",
+                        albumArtUri(a.albumId),
+                        active = a.songs.any { it.id == currentSong?.id },
+                        playing = playing
+                    ) { open = a }
                 }
             }
-            items(current.songs) { s ->
-                SongRow(
-                    s.title,
-                    s.artist,
-                    s.artwork,
-                    active = s.id == currentSong?.id,
-                    playing = playing
-                ) { onPlay(s) }
+        } else {
+            LazyColumn {
+                item {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Artwork(albumArtUri(current.albumId), 96.dp, RoundedCornerShape(16.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(current.name, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                            Text(current.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                        }
+                    }
+                }
+                items(current.songs) { s ->
+                    SongRow(
+                        s.title,
+                        s.artist,
+                        s.artwork,
+                        active = s.id == currentSong?.id,
+                        playing = playing
+                    ) { onPlay(s) }
+                }
             }
         }
     }
@@ -178,37 +194,48 @@ fun FoldersScreen(songs: List<Song>, currentSong: Song?, playing: Boolean, onPla
     var open by remember { mutableStateOf<FolderEntry?>(null) }
     BackHandler(enabled = open != null) { open = null }
 
-    val current = open
-    if (current == null) {
-        LazyColumn {
-            items(folders) { f ->
-                IconRow(
-                    f.name,
-                    "${f.count} canciones",
-                    Icons.Filled.Folder,
-                    active = f.path == currentSong?.folder,
-                    playing = playing
-                ) { open = f }
+    AnimatedContent(
+        targetState = open,
+        label = "foldersNav",
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInHorizontally { it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 4 } + fadeOut())
+            } else {
+                (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
             }
         }
-    } else {
-        val list = remember(songs, current) { songs.filter { it.folder == current.path } }
-        LazyColumn {
-            item {
-                Text(
-                    current.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(16.dp)
-                )
+    ) { current ->
+        if (current == null) {
+            LazyColumn {
+                items(folders) { f ->
+                    IconRow(
+                        f.name,
+                        "${f.count} canciones",
+                        Icons.Filled.Folder,
+                        active = f.path == currentSong?.folder,
+                        playing = playing
+                    ) { open = f }
+                }
             }
-            items(list) { s ->
-                SongRow(
-                    s.title,
-                    s.artist,
-                    s.artwork,
-                    active = s.id == currentSong?.id,
-                    playing = playing
-                ) { onPlay(s) }
+        } else {
+            val list = remember(songs, current) { songs.filter { it.folder == current.path } }
+            LazyColumn {
+                item {
+                    Text(
+                        current.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+                items(list) { s ->
+                    SongRow(
+                        s.title,
+                        s.artist,
+                        s.artwork,
+                        active = s.id == currentSong?.id,
+                        playing = playing
+                    ) { onPlay(s) }
+                }
             }
         }
     }
@@ -229,7 +256,6 @@ fun AllScreen(
     val list = if (likesOn) likes else songs
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    // Índice de la primera canción de cada letra, para el índice lateral
     val firstIndex = remember(list, showLetters, likesOn) {
         if (showLetters && !likesOn) {
             list.withIndex().groupBy { letterOf(it.value.title) }.mapValues { it.value.first().index }
@@ -249,6 +275,13 @@ fun AllScreen(
         if (likesOn && likes.isEmpty()) {
             Text(
                 "Todavía no hay canciones escuchadas.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+        if (!likesOn && list.isEmpty()) {
+            Text(
+                "No hay canciones que coincidan.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(16.dp)
             )
