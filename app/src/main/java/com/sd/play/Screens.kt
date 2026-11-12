@@ -2,6 +2,12 @@ package com.sd.play
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +23,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -28,28 +36,100 @@ private fun letterOf(title: String): String {
     return if (c in 'A'..'Z') c.toString() else "#"
 }
 
+// Tres barras que suben y bajan mientras suena; en pausa quedan quietas
 @Composable
-fun SongRow(title: String, subtitle: String, artwork: Uri?, onClick: () -> Unit) {
+fun EqualizerBars(playing: Boolean, color: Color) {
+    val transition = rememberInfiniteTransition(label = "equalizer")
+    val b1 by transition.animateFloat(0.3f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "b1")
+    val b2 by transition.animateFloat(1f, 0.35f, infiniteRepeatable(tween(560), RepeatMode.Reverse), label = "b2")
+    val b3 by transition.animateFloat(0.5f, 0.9f, infiniteRepeatable(tween(330), RepeatMode.Reverse), label = "b3")
+    val levels = listOf(b1, b2, b3)
+    Row(
+        Modifier.size(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        levels.forEach { level ->
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .fillMaxHeight(if (playing) level else 0.3f)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color)
+            )
+        }
+    }
+}
+
+@Composable
+fun SongRow(
+    title: String,
+    subtitle: String,
+    artwork: Uri?,
+    active: Boolean = false,
+    playing: Boolean = false,
+    onClick: () -> Unit,
+) {
     ListItem(
-        headlineContent = { Text(title, maxLines = 1) },
+        headlineContent = {
+            Text(
+                title,
+                maxLines = 1,
+                color = if (active) MaterialTheme.colorScheme.primary else Color.Unspecified
+            )
+        },
         supportingContent = { Text(subtitle, maxLines = 1) },
-        leadingContent = { Artwork(artwork, 48.dp, RoundedCornerShape(8.dp)) },
+        leadingContent = {
+            Box(contentAlignment = Alignment.Center) {
+                Artwork(artwork, 48.dp, RoundedCornerShape(8.dp))
+                if (active) {
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EqualizerBars(playing, Color.White)
+                    }
+                }
+            }
+        },
         modifier = Modifier.clickable(onClick = onClick)
     )
 }
 
 @Composable
-fun IconRow(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
+fun IconRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    active: Boolean = false,
+    playing: Boolean = false,
+    onClick: () -> Unit,
+) {
     ListItem(
-        headlineContent = { Text(title, maxLines = 1) },
+        headlineContent = {
+            Text(
+                title,
+                maxLines = 1,
+                color = if (active) MaterialTheme.colorScheme.primary else Color.Unspecified
+            )
+        },
         supportingContent = { Text(subtitle, maxLines = 1) },
-        leadingContent = { Icon(imageVector = icon, contentDescription = null) },
+        leadingContent = {
+            if (active) {
+                EqualizerBars(playing, MaterialTheme.colorScheme.primary)
+            } else {
+                Icon(imageVector = icon, contentDescription = null)
+            }
+        },
         modifier = Modifier.clickable(onClick = onClick)
     )
 }
 
 @Composable
-fun AlbumsScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
+fun AlbumsScreen(songs: List<Song>, currentSong: Song?, playing: Boolean, onPlay: (Song) -> Unit) {
     val albums = remember(songs) { albumsOf(songs) }
     var open by remember { mutableStateOf<Album?>(null) }
     BackHandler(enabled = open != null) { open = null }
@@ -58,7 +138,13 @@ fun AlbumsScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
     if (current == null) {
         LazyColumn {
             items(albums) { a ->
-                SongRow(a.name, "${a.artist} · ${a.songs.size} canciones", albumArtUri(a.albumId)) { open = a }
+                SongRow(
+                    a.name,
+                    "${a.artist} · ${a.songs.size} canciones",
+                    albumArtUri(a.albumId),
+                    active = a.songs.any { it.id == currentSong?.id },
+                    playing = playing
+                ) { open = a }
             }
         }
     } else {
@@ -74,14 +160,20 @@ fun AlbumsScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
                 }
             }
             items(current.songs) { s ->
-                SongRow(s.title, s.artist, s.artwork) { onPlay(s) }
+                SongRow(
+                    s.title,
+                    s.artist,
+                    s.artwork,
+                    active = s.id == currentSong?.id,
+                    playing = playing
+                ) { onPlay(s) }
             }
         }
     }
 }
 
 @Composable
-fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
+fun FoldersScreen(songs: List<Song>, currentSong: Song?, playing: Boolean, onPlay: (Song) -> Unit) {
     val folders = remember(songs) { foldersOf(songs) }
     var open by remember { mutableStateOf<FolderEntry?>(null) }
     BackHandler(enabled = open != null) { open = null }
@@ -90,7 +182,13 @@ fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
     if (current == null) {
         LazyColumn {
             items(folders) { f ->
-                IconRow(f.name, "${f.count} canciones", Icons.Filled.Folder) { open = f }
+                IconRow(
+                    f.name,
+                    "${f.count} canciones",
+                    Icons.Filled.Folder,
+                    active = f.path == currentSong?.folder,
+                    playing = playing
+                ) { open = f }
             }
         }
     } else {
@@ -104,7 +202,13 @@ fun FoldersScreen(songs: List<Song>, onPlay: (Song) -> Unit) {
                 )
             }
             items(list) { s ->
-                SongRow(s.title, s.artist, s.artwork) { onPlay(s) }
+                SongRow(
+                    s.title,
+                    s.artist,
+                    s.artwork,
+                    active = s.id == currentSong?.id,
+                    playing = playing
+                ) { onPlay(s) }
             }
         }
     }
@@ -119,6 +223,8 @@ fun AllScreen(
     onPlay: (Song) -> Unit,
     onPlayLikes: (List<Song>, Int) -> Unit,
     showLetters: Boolean,
+    currentSong: Song?,
+    playing: Boolean,
 ) {
     val list = if (likesOn) likes else songs
     val listState = rememberLazyListState()
@@ -150,7 +256,13 @@ fun AllScreen(
         Row(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                 itemsIndexed(list) { index, s ->
-                    SongRow(s.title, s.artist, s.artwork) {
+                    SongRow(
+                        s.title,
+                        s.artist,
+                        s.artwork,
+                        active = s.id == currentSong?.id,
+                        playing = playing
+                    ) {
                         if (likesOn) onPlayLikes(list, index) else onPlay(s)
                     }
                 }
