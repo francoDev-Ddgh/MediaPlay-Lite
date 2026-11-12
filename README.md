@@ -1,1 +1,1 @@
-Reproductor multimedia
+Reproductor multimedia minimalista 
